@@ -5,7 +5,6 @@ import (
 	"errors"
 )
 
-// Constantes
 const (
 	alphaMulTableLen = 256
 	alphaDivTableLen = 256
@@ -15,7 +14,6 @@ const (
 	outputSize       = 80
 )
 
-// ALPHA_MUL_TABLE - Tabela de multiplicação Alpha
 var alphaMulTable = [alphaMulTableLen]uint32{
 	0x00000000, 0xE19FCF13, 0x6B973726, 0x8A08F835,
 	0xD6876E4C, 0x3718A15F, 0xBD10596A, 0x5C8F9679,
@@ -83,7 +81,6 @@ var alphaMulTable = [alphaMulTableLen]uint32{
 	0xB55B4DDE, 0x54C482CD, 0xDECC7AF8, 0x3F53B5EB,
 }
 
-// ALPHA_DIV_TABLE - Tabela de divisão Alpha
 var alphaDivTable = [alphaDivTableLen]uint32{
 	0x00000000, 0x180F40CD, 0x301E8033, 0x2811C0FE,
 	0x603CA966, 0x7833E9AB, 0x50222955, 0x482D6998,
@@ -151,16 +148,14 @@ var alphaDivTable = [alphaDivTableLen]uint32{
 	0x9EE2651C, 0x86ED25D1, 0xAEFCE52F, 0xB6F3A5E2,
 }
 
-// Sosemanuk representa o cifrador de fluxo Sosemanuk
 type Sosemanuk struct {
-	lfsr   [lfsrLen]uint32
-	fsmR   [fsmRLen]uint32
+	lfsr    [lfsrLen]uint32
+	fsmR    [fsmRLen]uint32
 	subkeys [subkeysLen]uint32
-	output [outputSize]byte
-	offset uint32
+	output  [outputSize]byte
+	offset  uint32
 }
 
-// New cria uma nova instância do Sosemanuk com chave e nonce
 func New(key, nonce []byte) (*Sosemanuk, error) {
 	if len(key) > 32 {
 		return nil, errors.New("sosemanuk: key length must be <= 32 bytes")
@@ -170,11 +165,11 @@ func New(key, nonce []byte) (*Sosemanuk, error) {
 	}
 
 	s := &Sosemanuk{
-		lfsr:   [lfsrLen]uint32{},
-		fsmR:   [fsmRLen]uint32{},
+		lfsr:    [lfsrLen]uint32{},
+		fsmR:    [fsmRLen]uint32{},
 		subkeys: [subkeysLen]uint32{},
-		output: [outputSize]byte{},
-		offset: 80,
+		output:  [outputSize]byte{},
+		offset:  80,
 	}
 
 	keySetup(key, &s.subkeys)
@@ -183,10 +178,11 @@ func New(key, nonce []byte) (*Sosemanuk, error) {
 	return s, nil
 }
 
-// keySetup - configuração da chave
+// ==================== KEY SETUP ROUNDS ====================
+
 func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	var fullKey [32]byte
-	
+
 	if len(key) < 32 {
 		copy(fullKey[:], key)
 		fullKey[len(key)] = 0x01
@@ -202,22 +198,20 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	w5 := binary.LittleEndian.Uint32(fullKey[20:24])
 	w6 := binary.LittleEndian.Uint32(fullKey[24:28])
 	w7 := binary.LittleEndian.Uint32(fullKey[28:32])
-	
+
 	var r0, r1, r2, r3, r4, tt uint32
 	i := 0
 
-	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ (0))
+	// ROUND 0-3
+	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ 0)
 	w0 = rotl32(tt, 11)
-	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ (0 + 1))
+	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ 1)
 	w1 = rotl32(tt, 11)
-	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ (0 + 2))
+	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ 2)
 	w2 = rotl32(tt, 11)
-	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ (0 + 3))
+	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ 3)
 	w3 = rotl32(tt, 11)
-	r0 = w0
-	r1 = w1
-	r2 = w2
-	r3 = w3
+	r0, r1, r2, r3 = w0, w1, w2, w3
 	r4 = r0
 	r0 |= r3
 	r3 ^= r1
@@ -237,22 +231,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r2 = r1
 	r1 |= r3
 	r1 ^= r0
-	subkeys[i] = r1; i++
-	subkeys[i] = r2; i++
-	subkeys[i] = r3; i++
-	subkeys[i] = r4; i++
-	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ (4))
+	subkeys[i] = r1
+	i++
+	subkeys[i] = r2
+	i++
+	subkeys[i] = r3
+	i++
+	subkeys[i] = r4
+	i++
+
+	// ROUND 4-7
+	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ 4)
 	w4 = rotl32(tt, 11)
-	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ (4 + 1))
+	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ 5)
 	w5 = rotl32(tt, 11)
-	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ (4 + 2))
+	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ 6)
 	w6 = rotl32(tt, 11)
-	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ (4 + 3))
+	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ 7)
 	w7 = rotl32(tt, 11)
-	r0 = w4
-	r1 = w5
-	r2 = w6
-	r3 = w7
+	r0, r1, r2, r3 = w4, w5, w6, w7
 	r4 = r0
 	r0 &= r2
 	r0 ^= r3
@@ -269,22 +266,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r1 ^= r3
 	r1 ^= r4
 	r4 = ^r4
-	subkeys[i] = r2; i++
-	subkeys[i] = r3; i++
-	subkeys[i] = r1; i++
-	subkeys[i] = r4; i++
-	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ (8))
+	subkeys[i] = r2
+	i++
+	subkeys[i] = r3
+	i++
+	subkeys[i] = r1
+	i++
+	subkeys[i] = r4
+	i++
+
+	// ROUND 8-11
+	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ 8)
 	w0 = rotl32(tt, 11)
-	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ (8 + 1))
+	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ 9)
 	w1 = rotl32(tt, 11)
-	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ (8 + 2))
+	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ 10)
 	w2 = rotl32(tt, 11)
-	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ (8 + 3))
+	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ 11)
 	w3 = rotl32(tt, 11)
-	r0 = w0
-	r1 = w1
-	r2 = w2
-	r3 = w3
+	r0, r1, r2, r3 = w0, w1, w2, w3
 	r0 = ^r0
 	r2 = ^r2
 	r4 = r0
@@ -303,22 +303,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r1 ^= r0
 	r0 &= r2
 	r0 ^= r4
-	subkeys[i] = r2; i++
-	subkeys[i] = r0; i++
-	subkeys[i] = r3; i++
-	subkeys[i] = r1; i++
-	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ (12))
+	subkeys[i] = r2
+	i++
+	subkeys[i] = r0
+	i++
+	subkeys[i] = r3
+	i++
+	subkeys[i] = r1
+	i++
+
+	// ROUND 12-15
+	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ 12)
 	w4 = rotl32(tt, 11)
-	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ (12 + 1))
+	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ 13)
 	w5 = rotl32(tt, 11)
-	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ (12 + 2))
+	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ 14)
 	w6 = rotl32(tt, 11)
-	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ (12 + 3))
+	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ 15)
 	w7 = rotl32(tt, 11)
-	r0 = w4
-	r1 = w5
-	r2 = w6
-	r3 = w7
+	r0, r1, r2, r3 = w4, w5, w6, w7
 	r3 ^= r0
 	r4 = r1
 	r1 &= r3
@@ -337,22 +340,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r3 |= r0
 	r1 ^= r3
 	r4 ^= r3
-	subkeys[i] = r1; i++
-	subkeys[i] = r4; i++
-	subkeys[i] = r2; i++
-	subkeys[i] = r0; i++
-	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ (16))
+	subkeys[i] = r1
+	i++
+	subkeys[i] = r4
+	i++
+	subkeys[i] = r2
+	i++
+	subkeys[i] = r0
+	i++
+
+	// ROUND 16-19
+	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ 16)
 	w0 = rotl32(tt, 11)
-	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ (16 + 1))
+	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ 17)
 	w1 = rotl32(tt, 11)
-	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ (16 + 2))
+	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ 18)
 	w2 = rotl32(tt, 11)
-	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ (16 + 3))
+	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ 19)
 	w3 = rotl32(tt, 11)
-	r0 = w0
-	r1 = w1
-	r2 = w2
-	r3 = w3
+	r0, r1, r2, r3 = w0, w1, w2, w3
 	r4 = r1
 	r1 |= r2
 	r1 ^= r3
@@ -373,22 +379,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r2 = ^r2
 	r2 |= r0
 	r4 ^= r2
-	subkeys[i] = r4; i++
-	subkeys[i] = r3; i++
-	subkeys[i] = r1; i++
-	subkeys[i] = r0; i++
-	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ (20))
+	subkeys[i] = r4
+	i++
+	subkeys[i] = r3
+	i++
+	subkeys[i] = r1
+	i++
+	subkeys[i] = r0
+	i++
+
+	// ROUND 20-23
+	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ 20)
 	w4 = rotl32(tt, 11)
-	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ (20 + 1))
+	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ 21)
 	w5 = rotl32(tt, 11)
-	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ (20 + 2))
+	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ 22)
 	w6 = rotl32(tt, 11)
-	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ (20 + 3))
+	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ 23)
 	w7 = rotl32(tt, 11)
-	r0 = w4
-	r1 = w5
-	r2 = w6
-	r3 = w7
+	r0, r1, r2, r3 = w4, w5, w6, w7
 	r2 = ^r2
 	r4 = r3
 	r3 &= r0
@@ -407,22 +416,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r3 = ^r3
 	r2 &= r4
 	r2 ^= r3
-	subkeys[i] = r0; i++
-	subkeys[i] = r1; i++
-	subkeys[i] = r4; i++
-	subkeys[i] = r2; i++
-	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ (24))
+	subkeys[i] = r0
+	i++
+	subkeys[i] = r1
+	i++
+	subkeys[i] = r4
+	i++
+	subkeys[i] = r2
+	i++
+
+	// ROUND 24-27
+	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ 24)
 	w0 = rotl32(tt, 11)
-	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ (24 + 1))
+	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ 25)
 	w1 = rotl32(tt, 11)
-	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ (24 + 2))
+	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ 26)
 	w2 = rotl32(tt, 11)
-	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ (24 + 3))
+	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ 27)
 	w3 = rotl32(tt, 11)
-	r0 = w0
-	r1 = w1
-	r2 = w2
-	r3 = w3
+	r0, r1, r2, r3 = w0, w1, w2, w3
 	r0 ^= r1
 	r1 ^= r3
 	r3 = ^r3
@@ -442,22 +454,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r0 ^= r4
 	r4 |= r3
 	r2 ^= r4
-	subkeys[i] = r1; i++
-	subkeys[i] = r3; i++
-	subkeys[i] = r0; i++
-	subkeys[i] = r2; i++
-	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ (28))
+	subkeys[i] = r1
+	i++
+	subkeys[i] = r3
+	i++
+	subkeys[i] = r0
+	i++
+	subkeys[i] = r2
+	i++
+
+	// ROUND 28-31
+	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ 28)
 	w4 = rotl32(tt, 11)
-	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ (28 + 1))
+	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ 29)
 	w5 = rotl32(tt, 11)
-	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ (28 + 2))
+	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ 30)
 	w6 = rotl32(tt, 11)
-	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ (28 + 3))
+	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ 31)
 	w7 = rotl32(tt, 11)
-	r0 = w4
-	r1 = w5
-	r2 = w6
-	r3 = w7
+	r0, r1, r2, r3 = w4, w5, w6, w7
 	r1 ^= r3
 	r3 = ^r3
 	r2 ^= r3
@@ -478,22 +493,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r2 &= r3
 	r0 = ^r0
 	r4 ^= r2
-	subkeys[i] = r1; i++
-	subkeys[i] = r4; i++
-	subkeys[i] = r0; i++
-	subkeys[i] = r3; i++
-	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ (32))
+	subkeys[i] = r1
+	i++
+	subkeys[i] = r4
+	i++
+	subkeys[i] = r0
+	i++
+	subkeys[i] = r3
+	i++
+
+	// ROUND 32-35
+	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ 32)
 	w0 = rotl32(tt, 11)
-	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ (32 + 1))
+	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ 33)
 	w1 = rotl32(tt, 11)
-	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ (32 + 2))
+	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ 34)
 	w2 = rotl32(tt, 11)
-	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ (32 + 3))
+	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ 35)
 	w3 = rotl32(tt, 11)
-	r0 = w0
-	r1 = w1
-	r2 = w2
-	r3 = w3
+	r0, r1, r2, r3 = w0, w1, w2, w3
 	r4 = r0
 	r0 |= r3
 	r3 ^= r1
@@ -513,22 +531,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r2 = r1
 	r1 |= r3
 	r1 ^= r0
-	subkeys[i] = r1; i++
-	subkeys[i] = r2; i++
-	subkeys[i] = r3; i++
-	subkeys[i] = r4; i++
-	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ (36))
+	subkeys[i] = r1
+	i++
+	subkeys[i] = r2
+	i++
+	subkeys[i] = r3
+	i++
+	subkeys[i] = r4
+	i++
+
+	// ROUND 36-39
+	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ 36)
 	w4 = rotl32(tt, 11)
-	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ (36 + 1))
+	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ 37)
 	w5 = rotl32(tt, 11)
-	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ (36 + 2))
+	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ 38)
 	w6 = rotl32(tt, 11)
-	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ (36 + 3))
+	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ 39)
 	w7 = rotl32(tt, 11)
-	r0 = w4
-	r1 = w5
-	r2 = w6
-	r3 = w7
+	r0, r1, r2, r3 = w4, w5, w6, w7
 	r4 = r0
 	r0 &= r2
 	r0 ^= r3
@@ -545,22 +566,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r1 ^= r3
 	r1 ^= r4
 	r4 = ^r4
-	subkeys[i] = r2; i++
-	subkeys[i] = r3; i++
-	subkeys[i] = r1; i++
-	subkeys[i] = r4; i++
-	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ (40))
+	subkeys[i] = r2
+	i++
+	subkeys[i] = r3
+	i++
+	subkeys[i] = r1
+	i++
+	subkeys[i] = r4
+	i++
+
+	// ROUND 40-43
+	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ 40)
 	w0 = rotl32(tt, 11)
-	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ (40 + 1))
+	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ 41)
 	w1 = rotl32(tt, 11)
-	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ (40 + 2))
+	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ 42)
 	w2 = rotl32(tt, 11)
-	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ (40 + 3))
+	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ 43)
 	w3 = rotl32(tt, 11)
-	r0 = w0
-	r1 = w1
-	r2 = w2
-	r3 = w3
+	r0, r1, r2, r3 = w0, w1, w2, w3
 	r0 = ^r0
 	r2 = ^r2
 	r4 = r0
@@ -579,22 +603,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r1 ^= r0
 	r0 &= r2
 	r0 ^= r4
-	subkeys[i] = r2; i++
-	subkeys[i] = r0; i++
-	subkeys[i] = r3; i++
-	subkeys[i] = r1; i++
-	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ (44))
+	subkeys[i] = r2
+	i++
+	subkeys[i] = r0
+	i++
+	subkeys[i] = r3
+	i++
+	subkeys[i] = r1
+	i++
+
+	// ROUND 44-47
+	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ 44)
 	w4 = rotl32(tt, 11)
-	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ (44 + 1))
+	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ 45)
 	w5 = rotl32(tt, 11)
-	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ (44 + 2))
+	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ 46)
 	w6 = rotl32(tt, 11)
-	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ (44 + 3))
+	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ 47)
 	w7 = rotl32(tt, 11)
-	r0 = w4
-	r1 = w5
-	r2 = w6
-	r3 = w7
+	r0, r1, r2, r3 = w4, w5, w6, w7
 	r3 ^= r0
 	r4 = r1
 	r1 &= r3
@@ -613,22 +640,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r3 |= r0
 	r1 ^= r3
 	r4 ^= r3
-	subkeys[i] = r1; i++
-	subkeys[i] = r4; i++
-	subkeys[i] = r2; i++
-	subkeys[i] = r0; i++
-	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ (48))
+	subkeys[i] = r1
+	i++
+	subkeys[i] = r4
+	i++
+	subkeys[i] = r2
+	i++
+	subkeys[i] = r0
+	i++
+
+	// ROUND 48-51
+	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ 48)
 	w0 = rotl32(tt, 11)
-	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ (48 + 1))
+	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ 49)
 	w1 = rotl32(tt, 11)
-	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ (48 + 2))
+	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ 50)
 	w2 = rotl32(tt, 11)
-	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ (48 + 3))
+	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ 51)
 	w3 = rotl32(tt, 11)
-	r0 = w0
-	r1 = w1
-	r2 = w2
-	r3 = w3
+	r0, r1, r2, r3 = w0, w1, w2, w3
 	r4 = r1
 	r1 |= r2
 	r1 ^= r3
@@ -649,22 +679,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r2 = ^r2
 	r2 |= r0
 	r4 ^= r2
-	subkeys[i] = r4; i++
-	subkeys[i] = r3; i++
-	subkeys[i] = r1; i++
-	subkeys[i] = r0; i++
-	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ (52))
+	subkeys[i] = r4
+	i++
+	subkeys[i] = r3
+	i++
+	subkeys[i] = r1
+	i++
+	subkeys[i] = r0
+	i++
+
+	// ROUND 52-55
+	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ 52)
 	w4 = rotl32(tt, 11)
-	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ (52 + 1))
+	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ 53)
 	w5 = rotl32(tt, 11)
-	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ (52 + 2))
+	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ 54)
 	w6 = rotl32(tt, 11)
-	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ (52 + 3))
+	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ 55)
 	w7 = rotl32(tt, 11)
-	r0 = w4
-	r1 = w5
-	r2 = w6
-	r3 = w7
+	r0, r1, r2, r3 = w4, w5, w6, w7
 	r2 = ^r2
 	r4 = r3
 	r3 &= r0
@@ -683,22 +716,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r3 = ^r3
 	r2 &= r4
 	r2 ^= r3
-	subkeys[i] = r0; i++
-	subkeys[i] = r1; i++
-	subkeys[i] = r4; i++
-	subkeys[i] = r2; i++
-	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ (56))
+	subkeys[i] = r0
+	i++
+	subkeys[i] = r1
+	i++
+	subkeys[i] = r4
+	i++
+	subkeys[i] = r2
+	i++
+
+	// ROUND 56-59
+	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ 56)
 	w0 = rotl32(tt, 11)
-	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ (56 + 1))
+	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ 57)
 	w1 = rotl32(tt, 11)
-	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ (56 + 2))
+	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ 58)
 	w2 = rotl32(tt, 11)
-	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ (56 + 3))
+	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ 59)
 	w3 = rotl32(tt, 11)
-	r0 = w0
-	r1 = w1
-	r2 = w2
-	r3 = w3
+	r0, r1, r2, r3 = w0, w1, w2, w3
 	r0 ^= r1
 	r1 ^= r3
 	r3 = ^r3
@@ -718,22 +754,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r0 ^= r4
 	r4 |= r3
 	r2 ^= r4
-	subkeys[i] = r1; i++
-	subkeys[i] = r3; i++
-	subkeys[i] = r0; i++
-	subkeys[i] = r2; i++
-	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ (60))
+	subkeys[i] = r1
+	i++
+	subkeys[i] = r3
+	i++
+	subkeys[i] = r0
+	i++
+	subkeys[i] = r2
+	i++
+
+	// ROUND 60-63
+	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ 60)
 	w4 = rotl32(tt, 11)
-	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ (60 + 1))
+	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ 61)
 	w5 = rotl32(tt, 11)
-	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ (60 + 2))
+	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ 62)
 	w6 = rotl32(tt, 11)
-	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ (60 + 3))
+	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ 63)
 	w7 = rotl32(tt, 11)
-	r0 = w4
-	r1 = w5
-	r2 = w6
-	r3 = w7
+	r0, r1, r2, r3 = w4, w5, w6, w7
 	r1 ^= r3
 	r3 = ^r3
 	r2 ^= r3
@@ -754,22 +793,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r2 &= r3
 	r0 = ^r0
 	r4 ^= r2
-	subkeys[i] = r1; i++
-	subkeys[i] = r4; i++
-	subkeys[i] = r0; i++
-	subkeys[i] = r3; i++
-	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ (64))
+	subkeys[i] = r1
+	i++
+	subkeys[i] = r4
+	i++
+	subkeys[i] = r0
+	i++
+	subkeys[i] = r3
+	i++
+
+	// ROUND 64-67
+	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ 64)
 	w0 = rotl32(tt, 11)
-	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ (64 + 1))
+	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ 65)
 	w1 = rotl32(tt, 11)
-	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ (64 + 2))
+	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ 66)
 	w2 = rotl32(tt, 11)
-	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ (64 + 3))
+	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ 67)
 	w3 = rotl32(tt, 11)
-	r0 = w0
-	r1 = w1
-	r2 = w2
-	r3 = w3
+	r0, r1, r2, r3 = w0, w1, w2, w3
 	r4 = r0
 	r0 |= r3
 	r3 ^= r1
@@ -789,22 +831,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r2 = r1
 	r1 |= r3
 	r1 ^= r0
-	subkeys[i] = r1; i++
-	subkeys[i] = r2; i++
-	subkeys[i] = r3; i++
-	subkeys[i] = r4; i++
-	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ (68))
+	subkeys[i] = r1
+	i++
+	subkeys[i] = r2
+	i++
+	subkeys[i] = r3
+	i++
+	subkeys[i] = r4
+	i++
+
+	// ROUND 68-71
+	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ 68)
 	w4 = rotl32(tt, 11)
-	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ (68 + 1))
+	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ 69)
 	w5 = rotl32(tt, 11)
-	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ (68 + 2))
+	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ 70)
 	w6 = rotl32(tt, 11)
-	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ (68 + 3))
+	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ 71)
 	w7 = rotl32(tt, 11)
-	r0 = w4
-	r1 = w5
-	r2 = w6
-	r3 = w7
+	r0, r1, r2, r3 = w4, w5, w6, w7
 	r4 = r0
 	r0 &= r2
 	r0 ^= r3
@@ -821,22 +866,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r1 ^= r3
 	r1 ^= r4
 	r4 = ^r4
-	subkeys[i] = r2; i++
-	subkeys[i] = r3; i++
-	subkeys[i] = r1; i++
-	subkeys[i] = r4; i++
-	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ (72))
+	subkeys[i] = r2
+	i++
+	subkeys[i] = r3
+	i++
+	subkeys[i] = r1
+	i++
+	subkeys[i] = r4
+	i++
+
+	// ROUND 72-75
+	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ 72)
 	w0 = rotl32(tt, 11)
-	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ (72 + 1))
+	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ 73)
 	w1 = rotl32(tt, 11)
-	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ (72 + 2))
+	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ 74)
 	w2 = rotl32(tt, 11)
-	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ (72 + 3))
+	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ 75)
 	w3 = rotl32(tt, 11)
-	r0 = w0
-	r1 = w1
-	r2 = w2
-	r3 = w3
+	r0, r1, r2, r3 = w0, w1, w2, w3
 	r0 = ^r0
 	r2 = ^r2
 	r4 = r0
@@ -855,22 +903,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r1 ^= r0
 	r0 &= r2
 	r0 ^= r4
-	subkeys[i] = r2; i++
-	subkeys[i] = r0; i++
-	subkeys[i] = r3; i++
-	subkeys[i] = r1; i++
-	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ (76))
+	subkeys[i] = r2
+	i++
+	subkeys[i] = r0
+	i++
+	subkeys[i] = r3
+	i++
+	subkeys[i] = r1
+	i++
+
+	// ROUND 76-79
+	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ 76)
 	w4 = rotl32(tt, 11)
-	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ (76 + 1))
+	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ 77)
 	w5 = rotl32(tt, 11)
-	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ (76 + 2))
+	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ 78)
 	w6 = rotl32(tt, 11)
-	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ (76 + 3))
+	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ 79)
 	w7 = rotl32(tt, 11)
-	r0 = w4
-	r1 = w5
-	r2 = w6
-	r3 = w7
+	r0, r1, r2, r3 = w4, w5, w6, w7
 	r3 ^= r0
 	r4 = r1
 	r1 &= r3
@@ -889,22 +940,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r3 |= r0
 	r1 ^= r3
 	r4 ^= r3
-	subkeys[i] = r1; i++
-	subkeys[i] = r4; i++
-	subkeys[i] = r2; i++
-	subkeys[i] = r0; i++
-	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ (80))
+	subkeys[i] = r1
+	i++
+	subkeys[i] = r4
+	i++
+	subkeys[i] = r2
+	i++
+	subkeys[i] = r0
+	i++
+
+	// ROUND 80-83
+	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ 80)
 	w0 = rotl32(tt, 11)
-	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ (80 + 1))
+	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ 81)
 	w1 = rotl32(tt, 11)
-	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ (80 + 2))
+	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ 82)
 	w2 = rotl32(tt, 11)
-	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ (80 + 3))
+	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ 83)
 	w3 = rotl32(tt, 11)
-	r0 = w0
-	r1 = w1
-	r2 = w2
-	r3 = w3
+	r0, r1, r2, r3 = w0, w1, w2, w3
 	r4 = r1
 	r1 |= r2
 	r1 ^= r3
@@ -925,22 +979,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r2 = ^r2
 	r2 |= r0
 	r4 ^= r2
-	subkeys[i] = r4; i++
-	subkeys[i] = r3; i++
-	subkeys[i] = r1; i++
-	subkeys[i] = r0; i++
-	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ (84))
+	subkeys[i] = r4
+	i++
+	subkeys[i] = r3
+	i++
+	subkeys[i] = r1
+	i++
+	subkeys[i] = r0
+	i++
+
+	// ROUND 84-87
+	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ 84)
 	w4 = rotl32(tt, 11)
-	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ (84 + 1))
+	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ 85)
 	w5 = rotl32(tt, 11)
-	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ (84 + 2))
+	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ 86)
 	w6 = rotl32(tt, 11)
-	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ (84 + 3))
+	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ 87)
 	w7 = rotl32(tt, 11)
-	r0 = w4
-	r1 = w5
-	r2 = w6
-	r3 = w7
+	r0, r1, r2, r3 = w4, w5, w6, w7
 	r2 = ^r2
 	r4 = r3
 	r3 &= r0
@@ -959,22 +1016,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r3 = ^r3
 	r2 &= r4
 	r2 ^= r3
-	subkeys[i] = r0; i++
-	subkeys[i] = r1; i++
-	subkeys[i] = r4; i++
-	subkeys[i] = r2; i++
-	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ (88))
+	subkeys[i] = r0
+	i++
+	subkeys[i] = r1
+	i++
+	subkeys[i] = r4
+	i++
+	subkeys[i] = r2
+	i++
+
+	// ROUND 88-91
+	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ 88)
 	w0 = rotl32(tt, 11)
-	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ (88 + 1))
+	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ 89)
 	w1 = rotl32(tt, 11)
-	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ (88 + 2))
+	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ 90)
 	w2 = rotl32(tt, 11)
-	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ (88 + 3))
+	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ 91)
 	w3 = rotl32(tt, 11)
-	r0 = w0
-	r1 = w1
-	r2 = w2
-	r3 = w3
+	r0, r1, r2, r3 = w0, w1, w2, w3
 	r0 ^= r1
 	r1 ^= r3
 	r3 = ^r3
@@ -994,22 +1054,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r0 ^= r4
 	r4 |= r3
 	r2 ^= r4
-	subkeys[i] = r1; i++
-	subkeys[i] = r3; i++
-	subkeys[i] = r0; i++
-	subkeys[i] = r2; i++
-	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ (92))
+	subkeys[i] = r1
+	i++
+	subkeys[i] = r3
+	i++
+	subkeys[i] = r0
+	i++
+	subkeys[i] = r2
+	i++
+
+	// ROUND 92-95
+	tt = w4 ^ w7 ^ w1 ^ w3 ^ (0x9E3779B9 ^ 92)
 	w4 = rotl32(tt, 11)
-	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ (92 + 1))
+	tt = w5 ^ w0 ^ w2 ^ w4 ^ (0x9E3779B9 ^ 93)
 	w5 = rotl32(tt, 11)
-	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ (92 + 2))
+	tt = w6 ^ w1 ^ w3 ^ w5 ^ (0x9E3779B9 ^ 94)
 	w6 = rotl32(tt, 11)
-	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ (92 + 3))
+	tt = w7 ^ w2 ^ w4 ^ w6 ^ (0x9E3779B9 ^ 95)
 	w7 = rotl32(tt, 11)
-	r0 = w4
-	r1 = w5
-	r2 = w6
-	r3 = w7
+	r0, r1, r2, r3 = w4, w5, w6, w7
 	r1 ^= r3
 	r3 = ^r3
 	r2 ^= r3
@@ -1030,22 +1093,25 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r2 &= r3
 	r0 = ^r0
 	r4 ^= r2
-	subkeys[i] = r1; i++
-	subkeys[i] = r4; i++
-	subkeys[i] = r0; i++
-	subkeys[i] = r3; i++
-	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ (96))
+	subkeys[i] = r1
+	i++
+	subkeys[i] = r4
+	i++
+	subkeys[i] = r0
+	i++
+	subkeys[i] = r3
+	i++
+
+	// ROUND 96-99
+	tt = w0 ^ w3 ^ w5 ^ w7 ^ (0x9E3779B9 ^ 96)
 	w0 = rotl32(tt, 11)
-	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ (96 + 1))
+	tt = w1 ^ w4 ^ w6 ^ w0 ^ (0x9E3779B9 ^ 97)
 	w1 = rotl32(tt, 11)
-	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ (96 + 2))
+	tt = w2 ^ w5 ^ w7 ^ w1 ^ (0x9E3779B9 ^ 98)
 	w2 = rotl32(tt, 11)
-	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ (96 + 3))
+	tt = w3 ^ w6 ^ w0 ^ w2 ^ (0x9E3779B9 ^ 99)
 	w3 = rotl32(tt, 11)
-	r0 = w0
-	r1 = w1
-	r2 = w2
-	r3 = w3
+	r0, r1, r2, r3 = w0, w1, w2, w3
 	r4 = r0
 	r0 |= r3
 	r3 ^= r1
@@ -1065,16 +1131,20 @@ func keySetup(key []byte, subkeys *[subkeysLen]uint32) {
 	r2 = r1
 	r1 |= r3
 	r1 ^= r0
-	subkeys[i] = r1; i++
-	subkeys[i] = r2; i++
-	subkeys[i] = r3; i++
+	subkeys[i] = r1
+	i++
+	subkeys[i] = r2
+	i++
+	subkeys[i] = r3
+	i++
 	subkeys[i] = r4
 }
 
-// ivSetup - configuração do vetor de inicialização
+// ==================== IV SETUP ROUNDS ====================
+
 func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR *[fsmRLen]uint32) {
 	var nonce [16]byte
-	
+
 	if len(iv) < 16 {
 		copy(nonce[:], iv)
 	} else {
@@ -1082,16 +1152,17 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	}
 
 	var r0, r1, r2, r3, r4 uint32
-	
+
 	r0 = binary.LittleEndian.Uint32(nonce[0:4])
 	r1 = binary.LittleEndian.Uint32(nonce[4:8])
 	r2 = binary.LittleEndian.Uint32(nonce[8:12])
 	r3 = binary.LittleEndian.Uint32(nonce[12:16])
 
+	// IV ROUND 0-3
 	r0 ^= subkeys[0]
-	r1 ^= subkeys[0+1]
-	r2 ^= subkeys[0+2]
-	r3 ^= subkeys[0+3]
+	r1 ^= subkeys[1]
+	r2 ^= subkeys[2]
+	r3 ^= subkeys[3]
 	r3 ^= r0
 	r4 = r1
 	r1 &= r3
@@ -1120,10 +1191,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	r2 = r2 ^ r0 ^ (r4 << 7)
 	r1 = rotl32(r1, 5)
 	r2 = rotl32(r2, 22)
+
+	// IV ROUND 4-7
 	r1 ^= subkeys[4]
-	r4 ^= subkeys[4+1]
-	r2 ^= subkeys[4+2]
-	r0 ^= subkeys[4+3]
+	r4 ^= subkeys[5]
+	r2 ^= subkeys[6]
+	r0 ^= subkeys[7]
 	r1 = ^r1
 	r2 = ^r2
 	r3 = r1
@@ -1152,10 +1225,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	r0 = r0 ^ r4 ^ (r1 << 7)
 	r2 = rotl32(r2, 5)
 	r0 = rotl32(r0, 22)
+
+	// IV ROUND 8-11
 	r2 ^= subkeys[8]
-	r1 ^= subkeys[8+1]
-	r0 ^= subkeys[8+2]
-	r4 ^= subkeys[8+3]
+	r1 ^= subkeys[9]
+	r0 ^= subkeys[10]
+	r4 ^= subkeys[11]
 	r3 = r2
 	r2 &= r0
 	r2 ^= r4
@@ -1182,10 +1257,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	r1 = r1 ^ r3 ^ (r4 << 7)
 	r0 = rotl32(r0, 5)
 	r1 = rotl32(r1, 22)
+
+	// IV ROUND 12-15
 	r0 ^= subkeys[12]
-	r4 ^= subkeys[12+1]
-	r1 ^= subkeys[12+2]
-	r3 ^= subkeys[12+3]
+	r4 ^= subkeys[13]
+	r1 ^= subkeys[14]
+	r3 ^= subkeys[15]
 	r2 = r0
 	r0 |= r3
 	r3 ^= r4
@@ -1215,10 +1292,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	r3 = r3 ^ r2 ^ (r1 << 7)
 	r4 = rotl32(r4, 5)
 	r3 = rotl32(r3, 22)
+
+	// IV ROUND 16-19
 	r4 ^= subkeys[16]
-	r1 ^= subkeys[16+1]
-	r3 ^= subkeys[16+2]
-	r2 ^= subkeys[16+3]
+	r1 ^= subkeys[17]
+	r3 ^= subkeys[18]
+	r2 ^= subkeys[19]
 	r1 ^= r2
 	r2 = ^r2
 	r3 ^= r2
@@ -1249,10 +1328,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	r4 = r4 ^ r2 ^ (r0 << 7)
 	r1 = rotl32(r1, 5)
 	r4 = rotl32(r4, 22)
+
+	// IV ROUND 20-23
 	r1 ^= subkeys[20]
-	r0 ^= subkeys[20+1]
-	r4 ^= subkeys[20+2]
-	r2 ^= subkeys[20+3]
+	r0 ^= subkeys[21]
+	r4 ^= subkeys[22]
+	r2 ^= subkeys[23]
 	r1 ^= r0
 	r0 ^= r2
 	r2 = ^r2
@@ -1282,10 +1363,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	r1 = r1 ^ r4 ^ (r2 << 7)
 	r0 = rotl32(r0, 5)
 	r1 = rotl32(r1, 22)
+
+	// IV ROUND 24-27
 	r0 ^= subkeys[24]
-	r2 ^= subkeys[24+1]
-	r1 ^= subkeys[24+2]
-	r4 ^= subkeys[24+3]
+	r2 ^= subkeys[25]
+	r1 ^= subkeys[26]
+	r4 ^= subkeys[27]
 	r1 = ^r1
 	r3 = r4
 	r4 &= r0
@@ -1314,10 +1397,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	r3 = r3 ^ r1 ^ (r2 << 7)
 	r0 = rotl32(r0, 5)
 	r3 = rotl32(r3, 22)
+
+	// IV ROUND 28-31
 	r0 ^= subkeys[28]
-	r2 ^= subkeys[28+1]
-	r3 ^= subkeys[28+2]
-	r1 ^= subkeys[28+3]
+	r2 ^= subkeys[29]
+	r3 ^= subkeys[30]
+	r1 ^= subkeys[31]
 	r4 = r2
 	r2 |= r3
 	r2 ^= r1
@@ -1348,10 +1433,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	r2 = r2 ^ r0 ^ (r1 << 7)
 	r4 = rotl32(r4, 5)
 	r2 = rotl32(r2, 22)
+
+	// IV ROUND 32-35
 	r4 ^= subkeys[32]
-	r1 ^= subkeys[32+1]
-	r2 ^= subkeys[32+2]
-	r0 ^= subkeys[32+3]
+	r1 ^= subkeys[33]
+	r2 ^= subkeys[34]
+	r0 ^= subkeys[35]
 	r0 ^= r4
 	r3 = r1
 	r1 &= r0
@@ -1380,10 +1467,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	r2 = r2 ^ r4 ^ (r3 << 7)
 	r1 = rotl32(r1, 5)
 	r2 = rotl32(r2, 22)
+
+	// IV ROUND 36-39
 	r1 ^= subkeys[36]
-	r3 ^= subkeys[36+1]
-	r2 ^= subkeys[36+2]
-	r4 ^= subkeys[36+3]
+	r3 ^= subkeys[37]
+	r2 ^= subkeys[38]
+	r4 ^= subkeys[39]
 	r1 = ^r1
 	r2 = ^r2
 	r0 = r1
@@ -1412,10 +1501,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	r4 = r4 ^ r3 ^ (r1 << 7)
 	r2 = rotl32(r2, 5)
 	r4 = rotl32(r4, 22)
+
+	// IV ROUND 40-43
 	r2 ^= subkeys[40]
-	r1 ^= subkeys[40+1]
-	r4 ^= subkeys[40+2]
-	r3 ^= subkeys[40+3]
+	r1 ^= subkeys[41]
+	r4 ^= subkeys[42]
+	r3 ^= subkeys[43]
 	r0 = r2
 	r2 &= r4
 	r2 ^= r3
@@ -1442,10 +1533,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	r1 = r1 ^ r0 ^ (r3 << 7)
 	r4 = rotl32(r4, 5)
 	r1 = rotl32(r1, 22)
+
+	// IV ROUND 44-47
 	r4 ^= subkeys[44]
-	r3 ^= subkeys[44+1]
-	r1 ^= subkeys[44+2]
-	r0 ^= subkeys[44+3]
+	r3 ^= subkeys[45]
+	r1 ^= subkeys[46]
+	r0 ^= subkeys[47]
 	r2 = r4
 	r4 |= r0
 	r0 ^= r3
@@ -1479,10 +1572,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	lfsr[8] = r1
 	lfsr[7] = r0
 	lfsr[6] = r2
+
+	// IV ROUND 48-51
 	r3 ^= subkeys[48]
-	r1 ^= subkeys[48+1]
-	r0 ^= subkeys[48+2]
-	r2 ^= subkeys[48+3]
+	r1 ^= subkeys[49]
+	r0 ^= subkeys[50]
+	r2 ^= subkeys[51]
 	r1 ^= r2
 	r2 = ^r2
 	r0 ^= r2
@@ -1513,10 +1608,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	r3 = r3 ^ r2 ^ (r4 << 7)
 	r1 = rotl32(r1, 5)
 	r3 = rotl32(r3, 22)
+
+	// IV ROUND 52-55
 	r1 ^= subkeys[52]
-	r4 ^= subkeys[52+1]
-	r3 ^= subkeys[52+2]
-	r2 ^= subkeys[52+3]
+	r4 ^= subkeys[53]
+	r3 ^= subkeys[54]
+	r2 ^= subkeys[55]
 	r1 ^= r4
 	r4 ^= r2
 	r2 = ^r2
@@ -1546,10 +1643,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	r1 = r1 ^ r3 ^ (r2 << 7)
 	r4 = rotl32(r4, 5)
 	r1 = rotl32(r1, 22)
+
+	// IV ROUND 56-59
 	r4 ^= subkeys[56]
-	r2 ^= subkeys[56+1]
-	r1 ^= subkeys[56+2]
-	r3 ^= subkeys[56+3]
+	r2 ^= subkeys[57]
+	r1 ^= subkeys[58]
+	r3 ^= subkeys[59]
 	r1 = ^r1
 	r0 = r3
 	r3 &= r4
@@ -1578,10 +1677,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	r0 = r0 ^ r1 ^ (r2 << 7)
 	r4 = rotl32(r4, 5)
 	r0 = rotl32(r0, 22)
+
+	// IV ROUND 60-63
 	r4 ^= subkeys[60]
-	r2 ^= subkeys[60+1]
-	r0 ^= subkeys[60+2]
-	r1 ^= subkeys[60+3]
+	r2 ^= subkeys[61]
+	r0 ^= subkeys[62]
+	r1 ^= subkeys[63]
 	r3 = r2
 	r2 |= r0
 	r2 ^= r1
@@ -1612,10 +1713,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	r2 = r2 ^ r4 ^ (r1 << 7)
 	r3 = rotl32(r3, 5)
 	r2 = rotl32(r2, 22)
+
+	// IV ROUND 64-67
 	r3 ^= subkeys[64]
-	r1 ^= subkeys[64+1]
-	r2 ^= subkeys[64+2]
-	r4 ^= subkeys[64+3]
+	r1 ^= subkeys[65]
+	r2 ^= subkeys[66]
+	r4 ^= subkeys[67]
 	r4 ^= r3
 	r0 = r1
 	r1 &= r4
@@ -1644,10 +1747,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	r2 = r2 ^ r3 ^ (r0 << 7)
 	r1 = rotl32(r1, 5)
 	r2 = rotl32(r2, 22)
+
+	// IV ROUND 68-71
 	r1 ^= subkeys[68]
-	r0 ^= subkeys[68+1]
-	r2 ^= subkeys[68+2]
-	r3 ^= subkeys[68+3]
+	r0 ^= subkeys[69]
+	r2 ^= subkeys[70]
+	r3 ^= subkeys[71]
 	r1 = ^r1
 	r2 = ^r2
 	r4 = r1
@@ -1680,10 +1785,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	lfsr[4] = r1
 	fsmR[1] = r3
 	lfsr[5] = r0
+
+	// IV ROUND 72-75
 	r2 ^= subkeys[72]
-	r1 ^= subkeys[72+1]
-	r3 ^= subkeys[72+2]
-	r0 ^= subkeys[72+3]
+	r1 ^= subkeys[73]
+	r3 ^= subkeys[74]
+	r0 ^= subkeys[75]
 	r4 = r2
 	r2 &= r3
 	r2 ^= r0
@@ -1710,10 +1817,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	r1 = r1 ^ r4 ^ (r0 << 7)
 	r3 = rotl32(r3, 5)
 	r1 = rotl32(r1, 22)
+
+	// IV ROUND 76-79
 	r3 ^= subkeys[76]
-	r0 ^= subkeys[76+1]
-	r1 ^= subkeys[76+2]
-	r4 ^= subkeys[76+3]
+	r0 ^= subkeys[77]
+	r1 ^= subkeys[78]
+	r4 ^= subkeys[79]
 	r2 = r3
 	r3 |= r4
 	r4 ^= r0
@@ -1743,10 +1852,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	r4 = r4 ^ r2 ^ (r1 << 7)
 	r0 = rotl32(r0, 5)
 	r4 = rotl32(r4, 22)
+
+	// IV ROUND 80-83
 	r0 ^= subkeys[80]
-	r1 ^= subkeys[80+1]
-	r4 ^= subkeys[80+2]
-	r2 ^= subkeys[80+3]
+	r1 ^= subkeys[81]
+	r4 ^= subkeys[82]
+	r2 ^= subkeys[83]
 	r1 ^= r2
 	r2 = ^r2
 	r4 ^= r2
@@ -1777,10 +1888,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	r0 = r0 ^ r2 ^ (r3 << 7)
 	r1 = rotl32(r1, 5)
 	r0 = rotl32(r0, 22)
+
+	// IV ROUND 84-87
 	r1 ^= subkeys[84]
-	r3 ^= subkeys[84+1]
-	r0 ^= subkeys[84+2]
-	r2 ^= subkeys[84+3]
+	r3 ^= subkeys[85]
+	r0 ^= subkeys[86]
+	r2 ^= subkeys[87]
 	r1 ^= r3
 	r3 ^= r2
 	r2 = ^r2
@@ -1810,10 +1923,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	r1 = r1 ^ r0 ^ (r2 << 7)
 	r3 = rotl32(r3, 5)
 	r1 = rotl32(r1, 22)
+
+	// IV ROUND 88-91
 	r3 ^= subkeys[88]
-	r2 ^= subkeys[88+1]
-	r1 ^= subkeys[88+2]
-	r0 ^= subkeys[88+3]
+	r2 ^= subkeys[89]
+	r1 ^= subkeys[90]
+	r0 ^= subkeys[91]
 	r1 = ^r1
 	r4 = r0
 	r0 &= r3
@@ -1842,10 +1957,12 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	r4 = r4 ^ r1 ^ (r2 << 7)
 	r3 = rotl32(r3, 5)
 	r4 = rotl32(r4, 22)
+
+	// IV ROUND 92-95
 	r3 ^= subkeys[92]
-	r2 ^= subkeys[92+1]
-	r4 ^= subkeys[92+2]
-	r1 ^= subkeys[92+3]
+	r2 ^= subkeys[93]
+	r4 ^= subkeys[94]
+	r1 ^= subkeys[95]
 	r0 = r2
 	r2 |= r4
 	r2 ^= r1
@@ -1876,17 +1993,20 @@ func ivSetup(iv []byte, subkeys *[subkeysLen]uint32, lfsr *[lfsrLen]uint32, fsmR
 	r2 = r2 ^ r3 ^ (r1 << 7)
 	r0 = rotl32(r0, 5)
 	r2 = rotl32(r2, 22)
+
+	// IV ROUND 96-99
 	r0 ^= subkeys[96]
-	r1 ^= subkeys[96+1]
-	r2 ^= subkeys[96+2]
-	r3 ^= subkeys[96+3]
+	r1 ^= subkeys[97]
+	r2 ^= subkeys[98]
+	r3 ^= subkeys[99]
 	lfsr[3] = r0
 	lfsr[2] = r1
 	lfsr[1] = r2
 	lfsr[0] = r3
 }
 
-// advanceState - avança o estado do cifrador
+// ==================== STATE ADVANCEMENT ROUNDS ====================
+
 func (s *Sosemanuk) advanceState() {
 	s0 := s.lfsr[0]
 	s1 := s.lfsr[1]
@@ -1900,9 +2020,10 @@ func (s *Sosemanuk) advanceState() {
 	s9 := s.lfsr[9]
 	r1 := s.fsmR[0]
 	r2 := s.fsmR[1]
-	
+
 	var f0, f1, f2, f3, f4, v0, v1, v2, v3, tt uint32
 
+	// ROUND 1
 	tt = r1
 	if r1&0x01 != 0 {
 		r1 = r2 + (s1 ^ s8)
@@ -1914,6 +2035,7 @@ func (s *Sosemanuk) advanceState() {
 	s0 = ((s0 << 8) ^ alphaMulTable[s0>>24]) ^ ((s3 >> 8) ^ alphaDivTable[s3&0xFF]) ^ s9
 	f0 = s9 + r1 ^ r2
 
+	// ROUND 2
 	tt = r1
 	if r1&0x01 != 0 {
 		r1 = r2 + (s2 ^ s9)
@@ -1925,6 +2047,7 @@ func (s *Sosemanuk) advanceState() {
 	s1 = ((s1 << 8) ^ alphaMulTable[s1>>24]) ^ ((s4 >> 8) ^ alphaDivTable[s4&0xFF]) ^ s0
 	f1 = s0 + r1 ^ r2
 
+	// ROUND 3
 	tt = r1
 	if r1&0x01 != 0 {
 		r1 = r2 + (s3 ^ s0)
@@ -1936,6 +2059,7 @@ func (s *Sosemanuk) advanceState() {
 	s2 = ((s2 << 8) ^ alphaMulTable[s2>>24]) ^ ((s5 >> 8) ^ alphaDivTable[s5&0xFF]) ^ s1
 	f2 = s1 + r1 ^ r2
 
+	// ROUND 4
 	tt = r1
 	if r1&0x01 != 0 {
 		r1 = r2 + (s4 ^ s1)
@@ -1947,6 +2071,7 @@ func (s *Sosemanuk) advanceState() {
 	s3 = ((s3 << 8) ^ alphaMulTable[s3>>24]) ^ ((s6 >> 8) ^ alphaDivTable[s6&0xFF]) ^ s2
 	f3 = s2 + r1 ^ r2
 
+	// S-BOX ROUND 1
 	f4 = f0
 	f0 &= f2
 	f0 ^= f3
@@ -1967,6 +2092,7 @@ func (s *Sosemanuk) advanceState() {
 	sboxRes := []uint32{f2 ^ v0, f3 ^ v1, f1 ^ v2, f4 ^ v3}
 	writeU32vLe(s.output[0:16], sboxRes)
 
+	// ROUND 5
 	tt = r1
 	if r1&0x01 != 0 {
 		r1 = r2 + (s5 ^ s2)
@@ -1978,6 +2104,7 @@ func (s *Sosemanuk) advanceState() {
 	s4 = ((s4 << 8) ^ alphaMulTable[s4>>24]) ^ ((s7 >> 8) ^ alphaDivTable[s7&0xFF]) ^ s3
 	f0 = s3 + r1 ^ r2
 
+	// ROUND 6
 	tt = r1
 	if r1&0x01 != 0 {
 		r1 = r2 + (s6 ^ s3)
@@ -1989,6 +2116,7 @@ func (s *Sosemanuk) advanceState() {
 	s5 = ((s5 << 8) ^ alphaMulTable[s5>>24]) ^ ((s8 >> 8) ^ alphaDivTable[s8&0xFF]) ^ s4
 	f1 = s4 + r1 ^ r2
 
+	// ROUND 7
 	tt = r1
 	if r1&0x01 != 0 {
 		r1 = r2 + (s7 ^ s4)
@@ -2000,6 +2128,7 @@ func (s *Sosemanuk) advanceState() {
 	s6 = ((s6 << 8) ^ alphaMulTable[s6>>24]) ^ ((s9 >> 8) ^ alphaDivTable[s9&0xFF]) ^ s5
 	f2 = s5 + r1 ^ r2
 
+	// ROUND 8
 	tt = r1
 	if r1&0x01 != 0 {
 		r1 = r2 + (s8 ^ s5)
@@ -2011,6 +2140,7 @@ func (s *Sosemanuk) advanceState() {
 	s7 = ((s7 << 8) ^ alphaMulTable[s7>>24]) ^ ((s0 >> 8) ^ alphaDivTable[s0&0xFF]) ^ s6
 	f3 = s6 + r1 ^ r2
 
+	// S-BOX ROUND 2
 	f4 = f0
 	f0 &= f2
 	f0 ^= f3
@@ -2031,6 +2161,7 @@ func (s *Sosemanuk) advanceState() {
 	sboxRes = []uint32{f2 ^ v0, f3 ^ v1, f1 ^ v2, f4 ^ v3}
 	writeU32vLe(s.output[16:32], sboxRes)
 
+	// ROUND 9
 	tt = r1
 	if r1&0x01 != 0 {
 		r1 = r2 + (s9 ^ s6)
@@ -2042,6 +2173,7 @@ func (s *Sosemanuk) advanceState() {
 	s8 = ((s8 << 8) ^ alphaMulTable[s8>>24]) ^ ((s1 >> 8) ^ alphaDivTable[s1&0xFF]) ^ s7
 	f0 = s7 + r1 ^ r2
 
+	// ROUND 10
 	tt = r1
 	if r1&0x01 != 0 {
 		r1 = r2 + (s0 ^ s7)
@@ -2053,6 +2185,7 @@ func (s *Sosemanuk) advanceState() {
 	s9 = ((s9 << 8) ^ alphaMulTable[s9>>24]) ^ ((s2 >> 8) ^ alphaDivTable[s2&0xFF]) ^ s8
 	f1 = s8 + r1 ^ r2
 
+	// ROUND 11
 	tt = r1
 	if r1&0x01 != 0 {
 		r1 = r2 + (s1 ^ s8)
@@ -2064,6 +2197,7 @@ func (s *Sosemanuk) advanceState() {
 	s0 = ((s0 << 8) ^ alphaMulTable[s0>>24]) ^ ((s3 >> 8) ^ alphaDivTable[s3&0xFF]) ^ s9
 	f2 = s9 + r1 ^ r2
 
+	// ROUND 12
 	tt = r1
 	if r1&0x01 != 0 {
 		r1 = r2 + (s2 ^ s9)
@@ -2075,6 +2209,7 @@ func (s *Sosemanuk) advanceState() {
 	s1 = ((s1 << 8) ^ alphaMulTable[s1>>24]) ^ ((s4 >> 8) ^ alphaDivTable[s4&0xFF]) ^ s0
 	f3 = s0 + r1 ^ r2
 
+	// S-BOX ROUND 3
 	f4 = f0
 	f0 &= f2
 	f0 ^= f3
@@ -2095,6 +2230,7 @@ func (s *Sosemanuk) advanceState() {
 	sboxRes = []uint32{f2 ^ v0, f3 ^ v1, f1 ^ v2, f4 ^ v3}
 	writeU32vLe(s.output[32:48], sboxRes)
 
+	// ROUND 13
 	tt = r1
 	if r1&0x01 != 0 {
 		r1 = r2 + (s3 ^ s0)
@@ -2106,6 +2242,7 @@ func (s *Sosemanuk) advanceState() {
 	s2 = ((s2 << 8) ^ alphaMulTable[s2>>24]) ^ ((s5 >> 8) ^ alphaDivTable[s5&0xFF]) ^ s1
 	f0 = s1 + r1 ^ r2
 
+	// ROUND 14
 	tt = r1
 	if r1&0x01 != 0 {
 		r1 = r2 + (s4 ^ s1)
@@ -2117,6 +2254,7 @@ func (s *Sosemanuk) advanceState() {
 	s3 = ((s3 << 8) ^ alphaMulTable[s3>>24]) ^ ((s6 >> 8) ^ alphaDivTable[s6&0xFF]) ^ s2
 	f1 = s2 + r1 ^ r2
 
+	// ROUND 15
 	tt = r1
 	if r1&0x01 != 0 {
 		r1 = r2 + (s5 ^ s2)
@@ -2128,6 +2266,7 @@ func (s *Sosemanuk) advanceState() {
 	s4 = ((s4 << 8) ^ alphaMulTable[s4>>24]) ^ ((s7 >> 8) ^ alphaDivTable[s7&0xFF]) ^ s3
 	f2 = s3 + r1 ^ r2
 
+	// ROUND 16
 	tt = r1
 	if r1&0x01 != 0 {
 		r1 = r2 + (s6 ^ s3)
@@ -2139,6 +2278,7 @@ func (s *Sosemanuk) advanceState() {
 	s5 = ((s5 << 8) ^ alphaMulTable[s5>>24]) ^ ((s8 >> 8) ^ alphaDivTable[s8&0xFF]) ^ s4
 	f3 = s4 + r1 ^ r2
 
+	// S-BOX ROUND 4
 	f4 = f0
 	f0 &= f2
 	f0 ^= f3
@@ -2159,6 +2299,7 @@ func (s *Sosemanuk) advanceState() {
 	sboxRes = []uint32{f2 ^ v0, f3 ^ v1, f1 ^ v2, f4 ^ v3}
 	writeU32vLe(s.output[48:64], sboxRes)
 
+	// ROUND 17
 	tt = r1
 	if r1&0x01 != 0 {
 		r1 = r2 + (s7 ^ s4)
@@ -2170,6 +2311,7 @@ func (s *Sosemanuk) advanceState() {
 	s6 = ((s6 << 8) ^ alphaMulTable[s6>>24]) ^ ((s9 >> 8) ^ alphaDivTable[s9&0xFF]) ^ s5
 	f0 = s5 + r1 ^ r2
 
+	// ROUND 18
 	tt = r1
 	if r1&0x01 != 0 {
 		r1 = r2 + (s8 ^ s5)
@@ -2181,6 +2323,7 @@ func (s *Sosemanuk) advanceState() {
 	s7 = ((s7 << 8) ^ alphaMulTable[s7>>24]) ^ ((s0 >> 8) ^ alphaDivTable[s0&0xFF]) ^ s6
 	f1 = s6 + r1 ^ r2
 
+	// ROUND 19
 	tt = r1
 	if r1&0x01 != 0 {
 		r1 = r2 + (s9 ^ s6)
@@ -2192,6 +2335,7 @@ func (s *Sosemanuk) advanceState() {
 	s8 = ((s8 << 8) ^ alphaMulTable[s8>>24]) ^ ((s1 >> 8) ^ alphaDivTable[s1&0xFF]) ^ s7
 	f2 = s7 + r1 ^ r2
 
+	// ROUND 20
 	tt = r1
 	if r1&0x01 != 0 {
 		r1 = r2 + (s0 ^ s7)
@@ -2203,6 +2347,7 @@ func (s *Sosemanuk) advanceState() {
 	s9 = ((s9 << 8) ^ alphaMulTable[s9>>24]) ^ ((s2 >> 8) ^ alphaDivTable[s2&0xFF]) ^ s8
 	f3 = s8 + r1 ^ r2
 
+	// S-BOX ROUND 5
 	f4 = f0
 	f0 &= f2
 	f0 ^= f3
@@ -2238,27 +2383,21 @@ func (s *Sosemanuk) advanceState() {
 	s.offset = 0
 }
 
-// next - retorna o próximo byte do fluxo
-func (s *Sosemanuk) next() byte {
-	if s.offset == 80 {
-		s.advanceState()
-	}
-	ret := s.output[s.offset]
-	s.offset++
-	return ret
-}
+// ==================== PUBLIC METHODS ====================
 
-// Process - processa a entrada e gera a saída (XOR com fluxo de chave)
 func (s *Sosemanuk) Process(input, output []byte) {
 	if len(input) != len(output) {
 		panic("sosemanuk: input and output lengths must be equal")
 	}
 	for i := 0; i < len(input); i++ {
-		output[i] = input[i] ^ s.next()
+		if s.offset == 80 {
+			s.advanceState()
+		}
+		output[i] = input[i] ^ s.output[s.offset]
+		s.offset++
 	}
 }
 
-// XORKeyStream - implementa a interface cipher.Stream
 func (s *Sosemanuk) XORKeyStream(dst, src []byte) {
 	if len(dst) < len(src) {
 		panic("sosemanuk: destination buffer is too small")
@@ -2266,14 +2405,14 @@ func (s *Sosemanuk) XORKeyStream(dst, src []byte) {
 	s.Process(src, dst)
 }
 
-// writeU32vLe - escreve um slice de uint32 em little-endian no buffer
+// ==================== UTILITIES ====================
+
 func writeU32vLe(dst []byte, src []uint32) {
 	for i, v := range src {
 		binary.LittleEndian.PutUint32(dst[i*4:], v)
 	}
 }
 
-// rotl32 - rotação para esquerda de 32 bits
 func rotl32(x uint32, n uint) uint32 {
 	return (x << n) | (x >> (32 - n))
 }
