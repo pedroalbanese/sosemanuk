@@ -7,32 +7,45 @@ Sosemanuk Stream Cipher in Pure Go
 package main
 
 import (
-    "fmt"
-    "log"
-    "github.com/yourusername/sosemanuk"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"io"
+	"log"
+
+	"github.com/yourusername/sosemanuk"
 )
 
 func main() {
-    // Key: 1-32 bytes, Nonce: 1-16 bytes
-    key := []byte("32byte-key-example-1234567890!!")
-    nonce := []byte("16byte-nonce-ex")
-    
-    // Create cipher
-    cipher, err := sosemanuk.New(key, nonce)
-    if err != nil {
-        log.Fatal(err)
-    }
-    
-    plaintext := []byte("Hello, Sosemanuk!")
-    ciphertext := make([]byte, len(plaintext))
-    
-    // Encrypt
-    cipher.Process(plaintext, ciphertext)
-    fmt.Printf("Encrypted: %x\n", ciphertext)
-    
-    // Decrypt (same operation)
-    cipher.Process(ciphertext, plaintext)
-    fmt.Printf("Decrypted: %s\n", plaintext)
+	key := make([]byte, 32)
+	_, err := io.ReadFull(rand.Reader, key)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("Key:", hex.EncodeToString(key))
+
+	nonce := make([]byte, 16)
+	_, err = io.ReadFull(rand.Reader, nonce)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("Nonce:", hex.EncodeToString(nonce))
+
+	cipher, err := sosemanuk.New(key, nonce)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	plaintext := []byte("Hello, Sosemanuk!")
+	ciphertext := make([]byte, len(plaintext))
+
+	cipher.XORKeyStream(ciphertext, plaintext)
+	fmt.Printf("Plaintext:  %s\n", plaintext)
+	fmt.Printf("Ciphertext: %x\n", ciphertext)
+
+	decrypted := make([]byte, len(ciphertext))
+	cipher.XORKeyStream(decrypted, ciphertext)
+	fmt.Printf("Decrypted:  %s\n", decrypted)
 }
 ```
 
