@@ -3,9 +3,10 @@
 [![GoDoc](https://godoc.org/github.com/pedroalbanese/sosemanuk?status.png)](http://godoc.org/github.com/pedroalbanese/sosemanuk)
 [![Go Report Card](https://goreportcard.com/badge/github.com/pedroalbanese/sosemanuk)](https://goreportcard.com/report/github.com/pedroalbanese/sosemanuk)
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/pedroalbanese/sosemanuk)](https://github.com/pedroalbanese/sosemanuk/releases)
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.18644431-blue.svg)](https://doi.org/10.5281/zenodo.18644431)
 
-Sosemanuk Stream Cipher in Pure Go
-
+Sosemanuk Stream Cipher in Pure Go, Python, and PHP
+ 
 **SOSEMANUK** is a synchronous stream cipher, optimized for software implementation. It was one of the four finalists in Profile 1 (high software efficiency) of the eSTREAM project, alongside HC-128, Rabbit, and Salsa20/12.
 
 ---
